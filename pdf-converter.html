@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF to PNG Converter</title>
+    <!-- We use Mozilla's official PDF.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e2f;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+            margin: 0;
+        }
+        h1 { color: #00d2ff; margin-bottom: 10px; }
+        p.sub { color: #aaa; margin-top: 0; }
+        
+        .upload-box {
+            background: #2a2a40;
+            border: 2px dashed #00d2ff;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            width: 400px;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .upload-box:hover { background: #33334d; }
+        
+        input[type="file"] { display: none; }
+        
+        .btn {
+            background: #00d2ff;
+            color: #1e1e2f;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover { background: #00b8e6; }
+
+        #status { margin: 20px 0; font-size: 18px; color: #00d2ff; }
+        
+        #imageContainer {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-top: 20px;
+            width: 100%;
+            align-items: center;
+        }
+        
+        .page-result {
+            background: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        
+        canvas { display: none; } /* Hide the raw canvas, we only want the image */
+    </style>
+</head>
+<body>
+
+    <h1>⚡ PDF to PNG Converter</h1>
+    <p class="sub">Fast, free, and runs entirely in your browser!</p>
+
+    <label for="pdfInput" class="upload-box">
+        <h3>📁 Click to Select a PDF File</h3>
+        <p>(Or drag and drop)</p>
+        <input type="file" id="pdfInput" accept=".pdf">
+    </label>
+
+    <div id="status"></div>
+    <div id="imageContainer"></div>
+
+    <script>
+        // Set up the PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const fileInput = document.getElementById('pdfInput');
+        const status = document.getElementById('status');
+        const container = document.getElementById('imageContainer');
+
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Clear previous results
+            container.innerHTML = '';
+            status.innerText = `⏳ Processing "${file.name}"...`;
+
+            try {
+                // 1. Read the file as an ArrayBuffer
+                const arrayBuffer = await file.arrayBuffer();
+                
+                // 2. Load the PDF document
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const totalPages = pdf.numPages;
+                
+                status.innerText = `✅ Found ${totalPages} page(s). Converting...`;
+
+                // 3. Loop through every page and convert to PNG
+                for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    
+                    // Set scale (2.0 means 2x zoom for high quality)
+                    const scale = 2.0; 
+                    const viewport = page.getViewport({ scale: scale });
+
+                    // Create a canvas to draw the PDF page
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    // Render PDF page into canvas
+                    await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+                    // Convert canvas to PNG data URL
+                    const pngDataUrl = canvas.toDataURL('image/png');
+
+                    // Create an image element and a download link
+                    const imgWrapper = document.createElement('div');
+                    imgWrapper.className = 'page-result';
+                    
+                    const img = document.createElement('img');
+                    img.src = pngDataUrl;
+                    img.style.maxWidth = '600px'; // Limit display size
+                    img.style.width = '100%';
+                    
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = pngDataUrl;
+                    downloadLink.download = `page-${pageNum}.png`;
+                    downloadLink.className = 'btn';
+                    downloadLink.style.display = 'inline-block';
+                    downloadLink.style.marginTop = '10px';
+                    downloadLink.innerText = `⬇️ Download Page ${pageNum} PNG`;
+
+                    imgWrapper.appendChild(img);
+                    imgWrapper.appendChild(document.createElement('br'));
+                    imgWrapper.appendChild(downloadLink);
+                    
+                    container.appendChild(imgWrapper);
+                }
+
+                status.innerText = `🎉 Success! All ${totalPages} pages converted to PNG!`;
+
+            } catch (error) {
+                console.error(error);
+                status.innerText = `❌ Error: Could not process the PDF. Make sure it's a valid file.`;
+            }
+        });
+    </script>
+</body>
+</html>
